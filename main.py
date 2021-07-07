@@ -117,7 +117,30 @@ def apiGetRecipes():
     return apiRecipes
 
 
-recipesTable()
+def getRecipeIcon():
+    fetchRecipeIds = "SELECT id, name FROM recipes"
+    mycursor.execute(fetchRecipeIds)
+    myResult = mycursor.fetchall()
+    exclude = set([])
+    recipeFileName = ""
+    for recipe in myResult:
+        # print(id[1][0:10])
+        if recipeFileName in exclude:
+            pass
+        print("\nGetting " + str(recipe[0]) + ":" + str(recipe[1]) + " from the blizzard api...")
+        request = 'https://us.api.blizzard.com/data/wow/media/recipe/' + str(recipe[0]) + '?namespace=static-us'
+        response = requests.get(request, headers=headers)
+        recipeIconUrl = response.json().get('assets')[0]['value']
+        recipeFileName = recipeIconUrl[47:-4]
+        exclude.add(recipeFileName)
+        print("Added " + recipeFileName + " to the exclude list")
+        recipeFileExtension = ".jpg"
+        print("Downloading image for " + str(recipe[0]) + ":" + recipeFileName)
+        iconData = requests.get(recipeIconUrl).content
+        print("Saving " + recipeFileName + recipeFileExtension + " to the directory...")
+        with open(recipeFileName+recipeFileExtension, "wb") as handler:
+            handler.write(iconData)
 
+getRecipeIcon()
 
 print(datetime.datetime.now() - startTime)
