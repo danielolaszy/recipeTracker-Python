@@ -5,6 +5,9 @@ import requests  # pip install requests
 import os
 import mysql.connector
 
+import datetime
+startTime = datetime.datetime.now()
+
 mydb = mysql.connector.connect(
     host=os.getenv("MYSQL_HOST"),
     user=os.getenv("MYSQL_USER"),
@@ -87,12 +90,34 @@ def recipesTable():
     dropTable("recipes")
     print("Creating recipes table...")
     mycursor.execute("CREATE TABLE `recipes` ( `id` INT NOT NULL, `name` VARCHAR(255) NULL, `skill_tier_id` INT NOT NULL, PRIMARY KEY (`id`), INDEX `skill_tier_id_idx` (`skill_tier_id` ASC) VISIBLE, CONSTRAINT `skill_tier_id` FOREIGN KEY (`skill_tier_id`) REFERENCES `skill_tier` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION)")
-
-
-
-    # sqlAddSkillTiers= "INSERT INTO `skill_tier` (`id`, `name`, `profession_id`) VALUES (%s, %s, %s)"
-    # mycursor.executemany(sqlAddSkillTiers, apiGetSkillTiers())
+    sqlAddRecipes= "INSERT INTO `recipes` (`id`, `name`, `skill_tier_id`) VALUES (%s, %s, %s);"
+    mycursor.executemany(sqlAddRecipes, apiGetRecipes())
     print("Committing recipes to db...")
     mydb.commit()
 
+def apiGetRecipes():
+    fetchProfessionIds = "SELECT profession_id, id, name  FROM skill_tier"
+    mycursor.execute(fetchProfessionIds)
+    myResult = mycursor.fetchall()
+    apiRecipes = []
+    for profession in myResult:
+        if profession[1] not in (2551, 2552, 2553, 2554, 2555, 2556, 2558, 2559, 2560, 2561, 2562, 2563, 2564, 2566,  2567, 2585, 2586, 2587, 2588, 2589, 2590, 2591, 2592, 2754, 2760, 2761, 2762):
+            request = 'https://us.api.blizzard.com/data/wow/profession/' + str(profession[0]) + '/skill-tier/' + str(profession[1]) + '?namespace=static-us'
+            response = requests.get(request, headers=headers)
+            skillTierId = response.json().get('id')
+            professionName = response.json().get('name')
+            categories = response.json().get('categories')
+            for category in categories:
+                print("Getting recipes for category: " + str(category["name"]["en_US"]))
+                recipes = category["recipes"]
+                for recipe in recipes:
+                    print("Appending " + str(recipe["name"]["en_US"]) + " to the list...")
+                    apiRecipes.append(tuple((recipe["id"], recipe["name"]["en_US"], skillTierId)))
+    print("Obtained recipes for all skill tiers for all professions in db...")
+    return apiRecipes
+
+
 recipesTable()
+
+
+print(datetime.datetime.now() - startTime)
