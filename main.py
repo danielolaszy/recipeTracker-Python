@@ -17,6 +17,19 @@ mydb = mysql.connector.connect(
 mycursor = mydb.cursor()
 headers = {'Authorization': 'Bearer ' + os.getenv('API_ACCESS_TOKEN')}
 
+def dropDatabase(db):
+    dropDatabase = "DROP DATABASE IF EXISTS " + db
+    print("Executing '" + dropDatabase + "'")
+    mycursor.execute(dropDatabase)
+    print("Dropping " + db + "...")
+    mydb.commit()
+
+def createDatabase(db):
+    createDatabase = "CREATE SCHEMA " + db + ";"
+    print("Executing '" + createDatabase + "'")
+    mycursor.execute(createDatabase)
+    print("Creating " + db + " database...")
+    mydb.commit()
 
 def dropTable(table):
     dropTable = "DROP TABLE IF EXISTS " + table
@@ -35,6 +48,9 @@ def fetchTable(table):
 
 
 def professionsTable():
+    # dropDatabase("recipetracker")
+    # createDatabase("recipetracker")
+    dropTable("skill_tier")
     dropTable("professions")
     print("Creating professions table...")
     mycursor.execute("CREATE TABLE `professions` (`id` INT NOT NULL, `name` VARCHAR(45) NOT NULL, PRIMARY KEY (`id`))")
@@ -73,9 +89,8 @@ def apiGetSkillTiers():
     myResult = mycursor.fetchall()
     apiSkillTiers = []
     for id in myResult:
-        id = str(id).replace("(","").replace(")","").replace(",","")
-        print("Getting skill tiers for profession "+id+" from the blizzard api...")
-        request = 'https://us.api.blizzard.com/data/wow/profession/'+ id +'?namespace=static-us'
+        print("Getting skill tiers for profession " + str(id[0]) + " from the blizzard api...")
+        request = 'https://us.api.blizzard.com/data/wow/profession/'+ str(id[0]) +'?namespace=static-us'
         response = requests.get(request, headers=headers)
         skillTiers = response.json().get("skill_tiers")
         professionId = response.json().get("id")
@@ -89,7 +104,7 @@ def apiGetSkillTiers():
 def recipesTable():
     dropTable("recipes")
     print("Creating recipes table...")
-    mycursor.execute("CREATE TABLE `recipes` ( `id` INT NOT NULL, `name` VARCHAR(255) NULL, `skill_tier_id` INT NOT NULL, PRIMARY KEY (`id`), INDEX `skill_tier_id_idx` (`skill_tier_id` ASC) VISIBLE, CONSTRAINT `skill_tier_id` FOREIGN KEY (`skill_tier_id`) REFERENCES `skill_tier` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION)")
+    mycursor.execute("CREATE TABLE `recipetracker`.`recipes` ( `id` INT NOT NULL, `name` VARCHAR(255) NOT NULL, `icon` VARCHAR(255), `skill_tier_id` INT NOT NULL, PRIMARY KEY (`id`), INDEX `skill_tier_id_idx` (`skill_tier_id` ASC) VISIBLE, CONSTRAINT `skill_tier_id` FOREIGN KEY (`skill_tier_id`) REFERENCES `recipetracker`.`skill_tier` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION)")
     sqlAddRecipes= "INSERT INTO `recipes` (`id`, `name`, `skill_tier_id`) VALUES (%s, %s, %s);"
     mycursor.executemany(sqlAddRecipes, apiGetRecipes())
     print("Committing recipes to db...")
@@ -121,26 +136,29 @@ def getRecipeIcon():
     fetchRecipeIds = "SELECT id, name FROM recipes"
     mycursor.execute(fetchRecipeIds)
     myResult = mycursor.fetchall()
-    exclude = set([])
     recipeFileName = ""
-    for recipe in myResult:
-        # print(id[1][0:10])
-        if recipeFileName in exclude:
-            pass
+    recipeIcons = []
+    for recipe in myResult[:3]:
         print("\nGetting " + str(recipe[0]) + ":" + str(recipe[1]) + " from the blizzard api...")
         request = 'https://us.api.blizzard.com/data/wow/media/recipe/' + str(recipe[0]) + '?namespace=static-us'
         response = requests.get(request, headers=headers)
         recipeIconUrl = response.json().get('assets')[0]['value']
         recipeFileName = recipeIconUrl[47:-4]
-        exclude.add(recipeFileName)
-        print("Added " + recipeFileName + " to the exclude list")
         recipeFileExtension = ".jpg"
+        recipeIcons.append(recipeFileName)        
         print("Downloading image for " + str(recipe[0]) + ":" + recipeFileName)
         iconData = requests.get(recipeIconUrl).content
         print("Saving " + recipeFileName + recipeFileExtension + " to the directory...")
         with open(recipeFileName+recipeFileExtension, "wb") as handler:
             handler.write(iconData)
+    print(recipeIcons)
+    mycursor.execute("INSERT INTO recipes (icon) VALUES ( 'test' );")
+    mydb.commit()
 
+
+professionsTable()
+skillTierTable()
+recipesTable()
 getRecipeIcon()
 
 print(datetime.datetime.now() - startTime)
