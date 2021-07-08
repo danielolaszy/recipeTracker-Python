@@ -157,38 +157,42 @@ def apiGetRecipes():
 #     mycursor.executemany(sqlAddRecipeIcon,recipeIcons)
 #     mydb.commit()
 
-def apiGetCrafted():
-    mycursor.execute("SELECT id, name FROM recipes")
-    myResult = mycursor.fetchall()
-    craftedItems = []
-    craftedAllianceItems = []
-    craftedHordeItems = []
-    i=-1
-    n=-1
-    for recipe in myResult[:1000]:
-        request = 'https://us.api.blizzard.com/data/wow/recipe/' + str(recipe[0]) + '?namespace=static-us&locale=en_US'
-        response = requests.get(request, headers=headers)
-        recipeId = response.json().get("id")
-        craftedItem = response.json().get("crafted_item")
-        craftedAlliance = response.json().get("alliance_crafted_item")
-        craftedHorde = response.json().get("horde_crafted_item")
-        if craftedAlliance is not None or craftedHorde is not None:
-            if len(craftedAllianceItems) > 0 and len(craftedHordeItems) > 0:
-                if craftedAlliance.get("id") == craftedAllianceItems[i][2] or craftedHorde.get("id") == craftedHordeItems[i][2]:
-                    print(i + ": Faction item already exists... skipping...")
-                    continue
-            print(i + ": Appending crafted item " + str(craftedAlliance.get("name")) + ":" + str(craftedAlliance.get("id")) + " with recipeId:" + str(recipeId) +" to craftedAllianceItems...")
-            craftedAllianceItems.append(tuple((recipeId,craftedAlliance.get("name"),craftedAlliance.get("id"))))
-            print(i + ": Appending crafted item " + str(craftedHorde.get("name")) + ":" + str(craftedHorde.get("id")) + " with recipeId:" + str(recipeId) +" to craftedHordeItems...")
-            craftedHordeItems.append(tuple((recipeId,craftedHorde.get("name"),craftedHorde.get("id"))))
-            i += 1
-        elif craftedItem is not None:
-            if craftedItem.get("id") == craftedItems[n][2]:
-                print(n + ": Crafted item already exists... skipping...")
-                continue
-            print("Appending crafted item " + str(craftedItem.get("name")) + ":" + str(craftedItem.get("id")) + " with recipeId:" + str(recipeId) +" to craftedItems...")
-            craftedItems.append(tuple((recipeId,craftedItem.get("name"),craftedItem.get("id"))))
-            n += 1
+# def apiGetCrafted():
+#     mycursor.execute("SELECT id, name FROM recipes")
+#     myResult = mycursor.fetchall()
+    
+#     craftedItems = []
+#     craftedAllianceItems = []
+#     craftedHordeItems = []
+#     for recipe in myResult:
+#         print(recipe[0])
+#     i=-1
+#     n=-1
+    # for recipe in myResult[:5]:
+    #     request = 'https://us.api.blizzard.com/data/wow/recipe/' + str(recipe[0]) + '?namespace=static-us&locale=en_US'
+    #     response = requests.get(request, headers=headers)
+    #     recipeId = response.json().get("id")
+    #     craftedItem = response.json().get("crafted_item")
+    #     craftedAlliance = response.json().get("alliance_crafted_item")
+    #     craftedHorde = response.json().get("horde_crafted_item")
+    #     if craftedAlliance is not None or craftedHorde is not None:
+    #         if len(craftedAllianceItems) > 0 and len(craftedHordeItems) > 0:
+    #             if craftedAlliance.get("id") == craftedAllianceItems[i][2] or craftedHorde.get("id") == craftedHordeItems[i][2]:
+    #                 print(i + ": Faction item already exists... skipping...")
+    #                 continue
+    #         print(i + ": Appending crafted item " + str(craftedAlliance.get("name")) + ":" + str(craftedAlliance.get("id")) + " with recipeId:" + str(recipeId) +" to craftedAllianceItems...")
+    #         craftedAllianceItems.append(tuple((recipeId,craftedAlliance.get("name"),craftedAlliance.get("id"))))
+    #         print(i + ": Appending crafted item " + str(craftedHorde.get("name")) + ":" + str(craftedHorde.get("id")) + " with recipeId:" + str(recipeId) +" to craftedHordeItems...")
+    #         craftedHordeItems.append(tuple((recipeId,craftedHorde.get("name"),craftedHorde.get("id"))))
+    #         i += 1
+    #     elif craftedItem is not None:
+    #         if len(craftedItems) > 0:
+    #             if craftedItem.get("id") == craftedItems[n][2]:
+    #                 print(n + ": Crafted item already exists... skipping...")
+    #                 continue
+    #         print("Appending crafted item " + str(craftedItem.get("name")) + ":" + str(craftedItem.get("id")) + " with recipeId:" + str(recipeId) +" to craftedItems...")
+    #         craftedItems.append(tuple((recipeId,craftedItem.get("name"),craftedItem.get("id"))))
+    #         n += 1
         
         
     print("Obtained crafted items for all recipe id in db...")
@@ -265,9 +269,9 @@ def craftedHordeTable():
 
         
 
-craftedTable()
-craftedAllianceTable()
-craftedHordeTable()
-# apiGetCrafted()
+# craftedTable()
+# craftedAllianceTable()
+# craftedHordeTable()
+
 
 print(datetime.datetime.now() - startTime)
