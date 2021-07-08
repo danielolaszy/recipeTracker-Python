@@ -1,3 +1,4 @@
+from re import I
 from dotenv import load_dotenv
 load_dotenv()
 from requests.exceptions import HTTPError
@@ -132,33 +133,141 @@ def apiGetRecipes():
     return apiRecipes
 
 
-def getRecipeIcon():
-    fetchRecipeIds = "SELECT id, name FROM recipes"
-    mycursor.execute(fetchRecipeIds)
+# def getRecipeIcon():
+#     mycursor.execute("SELECT id, name FROM recipes")
+#     myResult = mycursor.fetchall()
+#     recipeFileName = ""
+#     recipeIcons = []
+#     for recipe in myResult[:3]:
+#         print("\nGetting " + str(recipe[0]) + ":" + str(recipe[1]) + " from the blizzard api...")
+#         request = 'https://us.api.blizzard.com/data/wow/media/recipe/' + str(recipe[0]) + '?namespace=static-us'
+#         response = requests.get(request, headers=headers)
+#         recipeIconUrl = response.json().get('assets')[0]['value']
+#         recipeFileName = recipeIconUrl[47:-4]
+#         recipeIcons.append(tuple((str(recipe[1]), recipeFileName)))
+#         recipeFileExtension = ".jpg"
+#         print("Downloading image for " + str(recipe[0]) + ":" + recipeFileName)
+#         iconData = requests.get(recipeIconUrl).content
+#         print("Saving " + recipeFileName + recipeFileExtension + " to the directory...")
+#         with open(recipeFileName+recipeFileExtension, "wb") as handler:
+#             handler.write(iconData)
+#     print(recipeIcons)
+#     print(len(recipeIcons))
+#     sqlAddRecipeIcon= "INSERT INTO `recipes` (`name`, `icon` ) VALUES (%s, %s);"
+#     mycursor.executemany(sqlAddRecipeIcon,recipeIcons)
+#     mydb.commit()
+
+def apiGetCrafted():
+    mycursor.execute("SELECT id, name FROM recipes")
     myResult = mycursor.fetchall()
-    recipeFileName = ""
-    recipeIcons = []
-    for recipe in myResult[:3]:
-        print("\nGetting " + str(recipe[0]) + ":" + str(recipe[1]) + " from the blizzard api...")
-        request = 'https://us.api.blizzard.com/data/wow/media/recipe/' + str(recipe[0]) + '?namespace=static-us'
+    craftedItems = []
+    craftedAllianceItems = []
+    craftedHordeItems = []
+    i=-1
+    n=-1
+    for recipe in myResult[:1000]:
+        request = 'https://us.api.blizzard.com/data/wow/recipe/' + str(recipe[0]) + '?namespace=static-us&locale=en_US'
         response = requests.get(request, headers=headers)
-        recipeIconUrl = response.json().get('assets')[0]['value']
-        recipeFileName = recipeIconUrl[47:-4]
-        recipeFileExtension = ".jpg"
-        recipeIcons.append(recipeFileName)        
-        print("Downloading image for " + str(recipe[0]) + ":" + recipeFileName)
-        iconData = requests.get(recipeIconUrl).content
-        print("Saving " + recipeFileName + recipeFileExtension + " to the directory...")
-        with open(recipeFileName+recipeFileExtension, "wb") as handler:
-            handler.write(iconData)
-    print(recipeIcons)
-    mycursor.execute("INSERT INTO recipes (icon) VALUES ( 'test' );")
+        recipeId = response.json().get("id")
+        craftedItem = response.json().get("crafted_item")
+        craftedAlliance = response.json().get("alliance_crafted_item")
+        craftedHorde = response.json().get("horde_crafted_item")
+        if craftedAlliance is not None or craftedHorde is not None:
+            if len(craftedAllianceItems) > 0 and len(craftedHordeItems) > 0:
+                if craftedAlliance.get("id") == craftedAllianceItems[i][2] or craftedHorde.get("id") == craftedHordeItems[i][2]:
+                    print(i + ": Faction item already exists... skipping...")
+                    continue
+            print(i + ": Appending crafted item " + str(craftedAlliance.get("name")) + ":" + str(craftedAlliance.get("id")) + " with recipeId:" + str(recipeId) +" to craftedAllianceItems...")
+            craftedAllianceItems.append(tuple((recipeId,craftedAlliance.get("name"),craftedAlliance.get("id"))))
+            print(i + ": Appending crafted item " + str(craftedHorde.get("name")) + ":" + str(craftedHorde.get("id")) + " with recipeId:" + str(recipeId) +" to craftedHordeItems...")
+            craftedHordeItems.append(tuple((recipeId,craftedHorde.get("name"),craftedHorde.get("id"))))
+            i += 1
+        elif craftedItem is not None:
+            if craftedItem.get("id") == craftedItems[n][2]:
+                print(n + ": Crafted item already exists... skipping...")
+                continue
+            print("Appending crafted item " + str(craftedItem.get("name")) + ":" + str(craftedItem.get("id")) + " with recipeId:" + str(recipeId) +" to craftedItems...")
+            craftedItems.append(tuple((recipeId,craftedItem.get("name"),craftedItem.get("id"))))
+            n += 1
+        
+        
+    print("Obtained crafted items for all recipe id in db...")
+    return craftedItems, craftedAllianceItems, craftedHordeItems
+
+craftedItems, craftedAllianceItems, craftedHordeItems = apiGetCrafted()
+
+def craftedTable():
+    dropTable("crafted")
+    print("Creating craftede table...")
+    mycursor.execute("""CREATE TABLE `recipetracker`.`crafted` (
+                            `id` INT NOT NULL,
+                            `name` VARCHAR(45) NOT NULL,
+                            `crafted_recipe_id` INT NOT NULL,
+                            PRIMARY KEY (`id`),
+                            UNIQUE INDEX `idcrafted_UNIQUE` (`id` ASC) VISIBLE,
+                            INDEX `crafted_recipe_id_idx` (`crafted_recipe_id` ASC) VISIBLE,
+                            CONSTRAINT `crafted_recipe_id`
+                                FOREIGN KEY (`crafted_recipe_id`)
+                                REFERENCES `recipetracker`.`recipes` (`id`)
+                                ON DELETE NO ACTION
+                                ON UPDATE NO ACTION);
+""")
+    sqlAddCrafted= "INSERT INTO `crafted` (`crafted_recipe_id`, `name`, `id`) VALUES (%s, %s, %s);"
+    mycursor.executemany(sqlAddCrafted, craftedItems)
+    print("Committing crafted to db...")
+    mydb.commit()
+
+def craftedAllianceTable():
+    dropTable("crafted_alliance")
+    print("Creating crafted_alliance table...")
+    mycursor.execute("""CREATE TABLE `recipetracker`.`crafted_alliance` (
+                            `id` INT NOT NULL,
+                            `name` VARCHAR(255) NOT NULL,
+                            `crafted_alliance_recipe_id` INT NOT NULL,
+                            PRIMARY KEY (`id`),
+                            UNIQUE INDEX `id_UNIQUE` (`id` ASC) VISIBLE,
+                            INDEX `crafted_alliance_recipe_id_idx` (`crafted_alliance_recipe_id` ASC) VISIBLE,
+                            CONSTRAINT `crafted_alliance_recipe_id`
+                                FOREIGN KEY (`crafted_alliance_recipe_id`)
+                                REFERENCES `recipetracker`.`recipes` (`id`)
+                                ON DELETE NO ACTION
+                                ON UPDATE NO ACTION);
+""")
+    sqlAddCraftedAlliance= "INSERT INTO `crafted_alliance` (`crafted_alliance_recipe_id`, `name`, `id`) VALUES (%s, %s, %s);"
+    mycursor.executemany(sqlAddCraftedAlliance, craftedAllianceItems)
+    print("Committing crafted_alliance to db...")
+    mydb.commit()
+
+def craftedHordeTable():
+    dropTable("crafted_horde")
+    print("Creating crafted_horde table...")
+    mycursor.execute("""CREATE TABLE `recipetracker`.`crafted_horde` (
+                            `id` INT NOT NULL,
+                            `name` VARCHAR(255) NOT NULL,
+                            `crafted_horde_recipe_id` INT NOT NULL,
+                            PRIMARY KEY (`id`),
+                            UNIQUE INDEX `id_UNIQUE` (`id` ASC) VISIBLE,
+                            INDEX `crafted_horde_recipe_id_idx` (`crafted_horde_recipe_id` ASC) VISIBLE,
+                            CONSTRAINT `crafted_horde_recipe_id`
+                                FOREIGN KEY (`crafted_horde_recipe_id`)
+                                REFERENCES `recipetracker`.`recipes` (`id`)
+                                ON DELETE NO ACTION
+                                ON UPDATE NO ACTION);
+""")
+    sqlAddCraftedHorde= "INSERT INTO `crafted_horde` (`crafted_horde_recipe_id`, `name`, `id`) VALUES (%s, %s, %s);"
+    mycursor.executemany(sqlAddCraftedHorde, craftedHordeItems)
+    print("Committing crafted_horde to db...")
     mydb.commit()
 
 
-professionsTable()
-skillTierTable()
-recipesTable()
-getRecipeIcon()
+
+
+
+        
+
+craftedTable()
+craftedAllianceTable()
+craftedHordeTable()
+# apiGetCrafted()
 
 print(datetime.datetime.now() - startTime)
