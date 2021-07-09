@@ -48,19 +48,24 @@ def fetchTable(table):
 
 
 
-def professionsTable():
-    # dropDatabase("recipetracker")
-    # createDatabase("recipetracker")
-    dropTable("skill_tier")
-    dropTable("professions")
-    print("Creating professions table...")
-    mycursor.execute("CREATE TABLE `professions` (`id` INT NOT NULL, `name` VARCHAR(45) NOT NULL, PRIMARY KEY (`id`))")
-    sqlAddProfession = "INSERT INTO `professions` (`id`, `name`) VALUES (%s, %s)"
-    sqlDeleteProfessions = "DELETE FROM `professions` WHERE id IN (794, 2777, 2787, 2791, 2811)"
+def createTableProfessions():
+    dropTable("Recipes")
+    dropTable("SkillTiers")
+    dropTable("Professions")
+    print("Creating Professions table...")
+    sqlCreateTable = """CREATE TABLE Professions (
+                        ProfessionId int NOT NULL,
+                        ProfessionName varchar(255) NOT NULL,
+                        PRIMARY KEY (ProfessionId)
+                        );
+                        """
+    mycursor.execute(sqlCreateTable)
+    sqlAddProfession = "INSERT INTO Professions (ProfessionId, ProfessionName) VALUES (%s, %s)"
+    sqlDeleteProfessions = "DELETE FROM Professions WHERE ProfessionId IN (794, 2777, 2787, 2791, 2811)"
     print("Executing mysql queries...")
     mycursor.executemany(sqlAddProfession, apiGetProfessions())
     mycursor.execute(sqlDeleteProfessions)
-    print("Committing professions to db...")
+    print("Committing Professions to db...")
     mydb.commit()
 
 def apiGetProfessions():
@@ -75,63 +80,115 @@ def apiGetProfessions():
     return apiProfessions
 
 
-def skillTierTable():
-    dropTable("skill_tier")
-    print("Creating skill_tier table...")
-    mycursor.execute("CREATE TABLE `skill_tier` (`id` INT NOT NULL, `name` VARCHAR(255) NOT NULL, `profession_id` INT NULL, PRIMARY KEY (`id`), INDEX `profession_id_idx` (`profession_id` ASC) VISIBLE, CONSTRAINT `profession_id` FOREIGN KEY (`profession_id`) REFERENCES `professions` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION)")
-    sqlAddSkillTiers= "INSERT INTO `skill_tier` (`id`, `name`, `profession_id`) VALUES (%s, %s, %s)"
+def createTableSkillTiers():
+    dropTable("Recipes")
+    dropTable("SkillTiers")
+    print("Creating SkillTiers table...")
+    sqlCreateTable = """CREATE TABLE SkillTiers (
+                        SkillTierId int NOT NULL,
+                        SkillTierName varchar(255) NOT NULL,
+                        ProfessionId int NOT NULL,
+                        PRIMARY KEY (SkillTierId),
+                        FOREIGN KEY (ProfessionId) REFERENCES Professions(ProfessionId)
+                        );
+                        """
+    mycursor.execute(sqlCreateTable)
+    sqlAddSkillTiers= "INSERT INTO SkillTiers (SkillTierId, SkillTierName, ProfessionId) VALUES (%s, %s, %s)"
     mycursor.executemany(sqlAddSkillTiers, apiGetSkillTiers())
-    print("Committing skill_tiers to db...")
+    print("Committing SkillTiers to db...")
     mydb.commit()
 
 def apiGetSkillTiers():
-    fetchProfessionIds = "SELECT id FROM professions"
+    fetchProfessionIds = "SELECT ProfessionId FROM Professions"
     mycursor.execute(fetchProfessionIds)
     myResult = mycursor.fetchall()
     apiSkillTiers = []
     for id in myResult:
         print("Getting skill tiers for profession " + str(id[0]) + " from the blizzard api...")
-        request = 'https://us.api.blizzard.com/data/wow/profession/'+ str(id[0]) +'?namespace=static-us'
+        request = 'https://us.api.blizzard.com/data/wow/profession/'+ str(id[0]) +'?namespace=static-us&locale=en_US'
         response = requests.get(request, headers=headers)
         skillTiers = response.json().get("skill_tiers")
         professionId = response.json().get("id")
         for tier in skillTiers:
-            print("Appending " + str(tier["name"]["en_US"]) + " to the list...")
-            apiSkillTiers.append(tuple((tier["id"], tier["name"]["en_US"], professionId)))
+            print("Found " + str(tier["name"]))
+            apiSkillTiers.append(tuple((tier["id"], tier["name"], professionId)))
     print("Obtained skill tiers for all professions in db...")
     return apiSkillTiers
 
+def createTableRecipes():
+    dropTable("Recipes")
+    print("Creating Recipes table...")
+    sqlCreateTable = """CREATE TABLE Recipes (
+                        RecipeId int NOT NULL,
+                        RecipeName varchar(255) NOT NULL,
+                        RecipeIcon varchar(255) DEFAULT NULL,
+                        RecipeIconUrl varchar(255) DEFAULT NULL,
+                        SkillTierId int NOT NULL,
+                        PRIMARY KEY (RecipeId),
+                        FOREIGN KEY (SkillTierId) REFERENCES SkillTiers(SkillTierId)
+                        );
+                        """
+    mycursor.execute(sqlCreateTable)
 
-def recipesTable():
-    dropTable("recipes")
-    print("Creating recipes table...")
-    mycursor.execute("CREATE TABLE `recipetracker`.`recipes` ( `id` INT NOT NULL, `name` VARCHAR(255) NOT NULL, `icon` VARCHAR(255), `skill_tier_id` INT NOT NULL, PRIMARY KEY (`id`), INDEX `skill_tier_id_idx` (`skill_tier_id` ASC) VISIBLE, CONSTRAINT `skill_tier_id` FOREIGN KEY (`skill_tier_id`) REFERENCES `recipetracker`.`skill_tier` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION)")
-    sqlAddRecipes= "INSERT INTO `recipes` (`id`, `name`, `skill_tier_id`) VALUES (%s, %s, %s);"
+    sqlAddRecipes= "INSERT INTO Recipes (RecipeId, RecipeName, SkillTierId) VALUES (%s, %s, %s);"
     mycursor.executemany(sqlAddRecipes, apiGetRecipes())
-    print("Committing recipes to db...")
+    print("Committing Recipes to db...")
     mydb.commit()
+    # sqlAddRecipeIcons = "INSERT INTO Recipes (RecipeIcon, RecipeIconUrl) VALUES ( %s, %s);"
+    # mycursor.executemany(sqlAddRecipeIcons,apiGetRecipeIcons())
+    # print("Committing recipes to db...")
+    # mydb.commit()
 
 def apiGetRecipes():
-    fetchProfessionIds = "SELECT profession_id, id, name  FROM skill_tier"
+    fetchProfessionIds = "SELECT ProfessionId, SkillTierId, SkillTierName  FROM SkillTiers"
     mycursor.execute(fetchProfessionIds)
     myResult = mycursor.fetchall()
     apiRecipes = []
+
     for profession in myResult:
-        if profession[1] not in (2551, 2552, 2553, 2554, 2555, 2556, 2558, 2559, 2560, 2561, 2562, 2563, 2564, 2566,  2567, 2585, 2586, 2587, 2588, 2589, 2590, 2591, 2592, 2754, 2760, 2761, 2762):
-            request = 'https://us.api.blizzard.com/data/wow/profession/' + str(profession[0]) + '/skill-tier/' + str(profession[1]) + '?namespace=static-us'
+
+            request = 'https://us.api.blizzard.com/data/wow/profession/' + str(profession[0]) + '/skill-tier/' + str(profession[1]) + '?namespace=static-us&locale=en_US'
             response = requests.get(request, headers=headers)
+
             skillTierId = response.json().get('id')
-            professionName = response.json().get('name')
             categories = response.json().get('categories')
-            for category in categories:
-                print("Getting recipes for category: " + str(category["name"]["en_US"]))
-                recipes = category["recipes"]
-                for recipe in recipes:
-                    print("Appending " + str(recipe["name"]["en_US"]) + " to the list...")
-                    apiRecipes.append(tuple((recipe["id"], recipe["name"]["en_US"], skillTierId)))
+            professionTierName = response.json().get('name')
+
+            professionRecipeNumber = 0
+            if categories is not None:
+                for category in categories:
+                    recipes = category["recipes"]
+                    professionRecipeNumber += len(recipes)
+                    for recipe in recipes:
+                        print("Found " + str(recipe["name"]) + ":" + str(recipe["id"]))
+                        apiRecipes.append(tuple((recipe["id"], recipe["name"], skillTierId)))
+                print("\033[1m" + "Found " + str(professionRecipeNumber) + " recipes for " + str(professionTierName) + "!\n" + "\033[0m")
+
+    
+
     print("Obtained recipes for all skill tiers for all professions in db...")
     return apiRecipes
 
+def apiGetRecipeIcons():
+    mycursor.execute("SELECT RecipeId, RecipeName FROM Recipes")
+    myResult = mycursor.fetchall()
+
+    for recipe in myResult[:50]:
+        request = 'https://us.api.blizzard.com/data/wow/media/recipe/' + str(recipe[0]) + '?namespace=static-us&locale=en_US'
+        response = requests.get(request, headers=headers)
+        recipeIconUrl = response.json().get('assets')[0]['value']
+        # get filename from full url
+        recipeIconFileName = recipeIconUrl[47:]
+        recipeIconFileExtension = ".jpg"
+        mycursor.execute("update Recipes set RecipeIcon=%s where RecipeId=%s",tuple((recipeIconFileName,recipe[0])))
+        mydb.commit() 
+        print("Downloading " + recipeIconFileName)
+        recipeIconImgData = requests.get(recipeIconUrl).content
+        with open(recipeIconFileName+recipeIconFileExtension, "wb") as handler:
+            handler.write(recipeIconImgData)
+
+  
+    # return sqlTest
 
 # def getRecipeIcon():
 #     mycursor.execute("SELECT id, name FROM recipes")
@@ -193,12 +250,10 @@ def apiGetRecipes():
     #         print("Appending crafted item " + str(craftedItem.get("name")) + ":" + str(craftedItem.get("id")) + " with recipeId:" + str(recipeId) +" to craftedItems...")
     #         craftedItems.append(tuple((recipeId,craftedItem.get("name"),craftedItem.get("id"))))
     #         n += 1
-        
-        
-    print("Obtained crafted items for all recipe id in db...")
-    return craftedItems, craftedAllianceItems, craftedHordeItems
+    # print("Obtained crafted items for all recipe id in db...")
+    # return craftedItems, craftedAllianceItems, craftedHordeItems
 
-craftedItems, craftedAllianceItems, craftedHordeItems = apiGetCrafted()
+# craftedItems, craftedAllianceItems, craftedHordeItems = apiGetCrafted()
 
 def craftedTable():
     dropTable("crafted")
@@ -265,13 +320,10 @@ def craftedHordeTable():
 
 
 
+createTableProfessions()
+createTableSkillTiers()
+createTableRecipes()
 
-
-        
-
-# craftedTable()
-# craftedAllianceTable()
-# craftedHordeTable()
 
 
 print(datetime.datetime.now() - startTime)
