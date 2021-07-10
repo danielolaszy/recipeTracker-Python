@@ -1,9 +1,11 @@
-from re import I
+# from re import I
 from dotenv import load_dotenv
 load_dotenv()
 from requests.exceptions import HTTPError
 import requests  # pip install requests
 import os
+import shutil
+from pathlib import Path
 import mysql.connector
 
 import datetime
@@ -91,6 +93,7 @@ def main():
     apiGetProfessions()
     apiGetSkillTiers()
     apiGetRecipes()
+    apiGetRecipeIcons()
 
 
 def apiGetProfessions():
@@ -151,29 +154,44 @@ def apiGetRecipeIcons():
     mycursor.execute("SELECT RecipeId, RecipeName FROM Recipes")
     table = mycursor.fetchall()
 
-    for row in table:
-        print("Querying Blizzard API for the RecipeIcon of " + row[0])
+    
+    dirPath = "./icons/recipes/"
+    print("Checking if '" + dirPath + "' exists...")
+    if os.path.exists(dirPath):
+        print("Dirctory '" + dirPath + "' found!")
+        print("Deleting '" + dirPath + "'")
+        shutil.rmtree(dirPath)
+        print("Creating '" + dirPath + "'")
+        os.makedirs(dirPath)
+    else:
+        print("Dirctory '" + dirPath + "not found...")
+        print("Creating '" + dirPath + "'")
+        os.makedirs(dirPath)
+    
+    for row in table[:5]:
+        print("Querying Blizzard API for the RecipeIcon of " + str(row[0]))
         request = 'https://us.api.blizzard.com/data/wow/media/recipe/' + str(row[0]) + '?namespace=static-us&locale=en_US'
         response = requests.get(request, headers=headers)
         recipeIconUrl = response.json().get('assets')[0]['value']
         recipeIconFileName = recipeIconUrl[47:]
 
         # Committing found icon file name to the database
-        print("Updating RecipeIcon column with " + recipeIconFileName + " where RecipeId is " + row[0])
+        print("Updating RecipeIcon column with " + recipeIconFileName + " where RecipeId is " + str(row[0]))
         mycursor.execute("update Recipes set RecipeIcon=%s where RecipeId=%s",tuple((recipeIconFileName,row[0])))
         mydb.commit() 
 
         #  Downloading recipe icon from the url found in the api query
-        print("Downloading " + recipeIconFileName)
+        print("Downloading " + recipeIconFileName + "to path " + dirPath)
         recipeIconImgData = requests.get(recipeIconUrl).content
-        with open(recipeIconFileName, "wb") as handler:
+        with open(dirPath + recipeIconFileName, "wb") as handler:
             handler.write(recipeIconImgData)
 
-
-
-
 main()
-
-
-
 print(datetime.datetime.now() - startTime)
+
+
+# Trainer
+# Vendor
+# World Drop
+# Raid Drop
+# Dungeon Drop
