@@ -7,8 +7,10 @@ import os
 import shutil
 from pathlib import Path
 import mysql.connector
-
+from bs4 import BeautifulSoup
 import datetime
+import asyncio
+from pyppeteer import launch
 startTime = datetime.datetime.now()
 
 mydb = mysql.connector.connect(
@@ -186,12 +188,37 @@ def apiGetRecipeIcons():
         with open(dirPath + recipeIconFileName, "wb") as handler:
             handler.write(recipeIconImgData)
 
-main()
+def getSource(searchQuery):
+    itemName = searchQuery.replace(" ", "+").replace("'","%27").replace(",","%2C").replace(":","%3")
+    url = "https://www.dataforazeroth.com/collections/recipes/9455/arcanite-reaper"
+    page = requests.get(url)
+    soup = BeautifulSoup(page.content, "html.parser")
+
+    searchBar = soup.find("div", string="Source")
+    print(soup)
+
+
+async def getItemSource(recipeId):
+    browser = await launch(headless=True)
+    page = await browser.newPage()
+    await page.goto('https://www.dataforazeroth.com/collections/recipes/' + str(recipeId))
+    card = await page.querySelector('.card-body')
+    rows = await card.querySelectorAll('div .row')
+    itemInfo = {}
+    i = 0
+    for row in rows:
+        if (i % 2 == 0):
+            key = await row.querySelector('.col-md-3')
+            keyEval = await page.evaluate('(element) => element.textContent', key)
+            value = await row.querySelector('.col-md-9')
+            valueEval = await page.evaluate('(element) => element.textContent', value)
+            itemInfo[keyEval] = valueEval
+
+        i += 1
+    print(itemInfo)
+    await browser.close()
+
+asyncio.get_event_loop().run_until_complete(getItemSource(9455))
+
 print(datetime.datetime.now() - startTime)
 
-
-# Trainer
-# Vendor
-# World Drop
-# Raid Drop
-# Dungeon Drop
