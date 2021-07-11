@@ -76,26 +76,38 @@ def main():
                         RecipeId int NOT NULL,
                         RecipeName varchar(255) NOT NULL,
                         RecipeIcon varchar(255) DEFAULT NULL,
+                        SourceType varchar(255) DEFAULT NULL,
+                        Source varchar(255) DEFAULT NULL,
+                        SourceZone varchar(255) DEFAULT NULL,
                         SkillTierId int NOT NULL,
                         PRIMARY KEY (RecipeId),
                         FOREIGN KEY (SkillTierId) REFERENCES SkillTiers(SkillTierId)
                         );
                         """
     # Dropping tables if exist
-    tables = ["Recipes", "SkillTiers", "Professions"]
-    for table in tables: 
-        dropTable(table)
+    # tables = ["Recipes", "SkillTiers", "Professions"]
+    # for table in tables: 
+    #     dropTable(table)
 
-    # Creating tables
-    createTable(tableProfessions)
-    createTable(tableSkillTiers)
-    createTable(tableRecipes)
+    # # Creating tables
+    # createTable(tableProfessions)
+    # createTable(tableSkillTiers)
+    # createTable(tableRecipes)
 
-    # Populating tables
-    apiGetProfessions()
-    apiGetSkillTiers()
-    apiGetRecipes()
-    apiGetRecipeIcons()
+    # # Populating tables
+    # apiGetProfessions()
+    # apiGetSkillTiers()
+    # apiGetRecipes()
+    # apiGetRecipeIcons()
+
+    mycursor.execute("SELECT RecipeId, RecipeName FROM Recipes")
+    table = mycursor.fetchall()
+
+    for row in table[:5]:
+        asyncio.get_event_loop().run_until_complete(getItemSource(row[0]))
+
+
+
 
 
 def apiGetProfessions():
@@ -199,13 +211,16 @@ def getSource(searchQuery):
 
 
 async def getItemSource(recipeId):
+    print("Opening browser...")
     browser = await launch(headless=True)
     page = await browser.newPage()
+    print("Finding webpage for id " + str(recipeId))
     await page.goto('https://www.dataforazeroth.com/collections/recipes/' + str(recipeId))
     card = await page.querySelector('.card-body')
     rows = await card.querySelectorAll('div .row')
     itemInfo = {}
     i = 0
+    print("Populating dictionary")
     for row in rows:
         if (i % 2 == 0):
             key = await row.querySelector('.col-md-3')
@@ -213,12 +228,30 @@ async def getItemSource(recipeId):
             value = await row.querySelector('.col-md-9')
             valueEval = await page.evaluate('(element) => element.textContent', value)
             itemInfo[keyEval] = valueEval
-
         i += 1
-    print(itemInfo)
     await browser.close()
+    print("Closing browser...")
 
-asyncio.get_event_loop().run_until_complete(getItemSource(9455))
 
+    if itemInfo["Source Type (Icon)"] == "— Blank —":
+        itemInfo["Source Type (Icon)"] = None
+    else:
+        itemInfo["Source Type (Icon)"].capitalize()
+
+    if itemInfo["Source"] == "— Blank —":
+        itemInfo["Source"] = None
+    else:
+        itemInfo["Source"].capitalize()
+
+    if itemInfo["Source Zone"] == "— Blank —":
+        itemInfo["Source Zone"] = None
+    else:
+        itemInfo["Source Zone"].capitalize()
+
+    mycursor.execute("UPDATE Recipes SET SourceType=%s, Source=%s, SourceZone=%s where RecipeId=%s",tuple((itemInfo["Source Type (Icon)"], itemInfo["Source"], itemInfo["Source Zone"], itemInfo["Blizzard API ID"])))
+    mydb.commit() 
+
+# asyncio.get_event_loop().run_until_complete(getItemSource(1353))
+main()
 print(datetime.datetime.now() - startTime)
 
