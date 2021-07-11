@@ -85,25 +85,35 @@ def main():
                         );
                         """
     # Dropping tables if exist
-    # tables = ["Recipes", "SkillTiers", "Professions"]
-    # for table in tables: 
-    #     dropTable(table)
+    tables = ["Recipes", "SkillTiers", "Professions"]
+    for table in tables: 
+        dropTable(table)
 
-    # # Creating tables
-    # createTable(tableProfessions)
-    # createTable(tableSkillTiers)
-    # createTable(tableRecipes)
+    # Creating tables
+    createTable(tableProfessions)
+    createTable(tableSkillTiers)
+    createTable(tableRecipes)
 
-    # # Populating tables
-    # apiGetProfessions()
-    # apiGetSkillTiers()
-    # apiGetRecipes()
-    # apiGetRecipeIcons()
+# Get initial professions
+    apiGetProfessions()
+
+    mycursor.execute("SELECT ProfessionId FROM Professions")
+    professionsTable = mycursor.fetchall()
+
+    for row in professionsTable:
+        apiGetSkillTiers(row[0])
+
+    mycursor.execute("SELECT ProfessionId, SkillTierId, SkillTierName FROM SkillTiers")
+    skillTiersTable = mycursor.fetchall()
+
+    for row in skillTiersTable:
+        apiGetRecipes(row[0], row[1])
 
     mycursor.execute("SELECT RecipeId, RecipeName FROM Recipes")
-    table = mycursor.fetchall()
+    recipesTable = mycursor.fetchall()
 
-    for row in table[:5]:
+    for row in recipesTable[:5]:
+        apiGetRecipeIcons(row[0])
         asyncio.get_event_loop().run_until_complete(getItemSource(row[0]))
 
 
@@ -121,54 +131,39 @@ def apiGetProfessions():
     mydb.commit()
     print("Found all professions...")
 
-def apiGetSkillTiers():
-    fetchProfessionIds = "SELECT ProfessionId FROM Professions"
-    mycursor.execute(fetchProfessionIds)
-    table = mycursor.fetchall()
-
-    for row in table:
-        print("Getting skill tiers for profession " + str(row[0]) + " from the blizzard api...")
-        request = 'https://us.api.blizzard.com/data/wow/profession/'+ str(row[0]) +'?namespace=static-us&locale=en_US'
-        response = requests.get(request, headers=headers)
-        skillTiers = response.json().get("skill_tiers")
-        professionId = response.json().get("id")
-        for tier in skillTiers:
-            print("Found " + str(tier["name"]))
-            mycursor.execute("INSERT INTO SkillTiers (SkillTierId, SkillTierName, ProfessionId) VALUES (%s, %s, %s)",tuple((tier["id"], tier["name"], professionId)))
-            mydb.commit() 
+def apiGetSkillTiers(professionId):
+    print("Getting skill tiers for profession " + str(professionId) + " from the blizzard api...")
+    request = 'https://us.api.blizzard.com/data/wow/profession/'+ str(professionId) +'?namespace=static-us&locale=en_US'
+    response = requests.get(request, headers=headers)
+    skillTiers = response.json().get("skill_tiers")
+    professionId = response.json().get("id")
+    for tier in skillTiers:
+        print("Found " + str(tier["name"]))
+        mycursor.execute("INSERT INTO SkillTiers (SkillTierId, SkillTierName, ProfessionId) VALUES (%s, %s, %s)",tuple((tier["id"], tier["name"], professionId)))
+        mydb.commit() 
     print("Obtained skill tiers for all professions in db...")
 
-def apiGetRecipes():
-    fetchProfessionIds = "SELECT ProfessionId, SkillTierId, SkillTierName  FROM SkillTiers"
-    mycursor.execute(fetchProfessionIds)
-    table = mycursor.fetchall()
+def apiGetRecipes(professionId, skillTierId):
+    request = 'https://us.api.blizzard.com/data/wow/profession/' + str(professionId) + '/skill-tier/' + str(skillTierId) + '?namespace=static-us&locale=en_US'
+    response = requests.get(request, headers=headers)
 
-    for row in table:
+    skillTierId = response.json().get('id')
+    categories = response.json().get('categories')
+    professionTierName = response.json().get('name')
 
-            request = 'https://us.api.blizzard.com/data/wow/profession/' + str(row[0]) + '/skill-tier/' + str(row[1]) + '?namespace=static-us&locale=en_US'
-            response = requests.get(request, headers=headers)
-
-            skillTierId = response.json().get('id')
-            categories = response.json().get('categories')
-            professionTierName = response.json().get('name')
-
-            professionRecipeNumber = 0
-            if categories is not None:
-                for category in categories:
-                    recipes = category["recipes"]
-                    professionRecipeNumber += len(recipes)
-                    for recipe in recipes:
-                        print("Found " + str(recipe["name"]) + ":" + str(recipe["id"]))
-                        mycursor.execute("INSERT INTO Recipes (RecipeId, RecipeName, SkillTierId) VALUES (%s, %s, %s)",tuple((recipe["id"], recipe["name"], skillTierId)))
-                        mydb.commit() 
-                print("\033[1m" + "Found " + str(professionRecipeNumber) + " recipes for " + str(professionTierName) + "!\n" + "\033[0m")
+    professionRecipeNumber = 0
+    if categories is not None:
+        for category in categories:
+            recipes = category["recipes"]
+            professionRecipeNumber += len(recipes)
+            for recipe in recipes:
+                print("Found " + str(recipe["name"]) + ":" + str(recipe["id"]))
+                mycursor.execute("INSERT INTO Recipes (RecipeId, RecipeName, SkillTierId) VALUES (%s, %s, %s)",tuple((recipe["id"], recipe["name"], skillTierId)))
+                mydb.commit() 
+        print("\033[1m" + "Found " + str(professionRecipeNumber) + " recipes for " + str(professionTierName) + "!\n" + "\033[0m")
     print("Obtained recipes for all skill tiers for all professions in db...")
 
-def apiGetRecipeIcons():
-    mycursor.execute("SELECT RecipeId, RecipeName FROM Recipes")
-    table = mycursor.fetchall()
-
-    
+def apiGetRecipeIcons(recipeId):   
     dirPath = "./icons/recipes/"
     print("Checking if '" + dirPath + "' exists...")
     if os.path.exists(dirPath):
@@ -182,32 +177,24 @@ def apiGetRecipeIcons():
         print("Creating '" + dirPath + "'")
         os.makedirs(dirPath)
     
-    for row in table[:5]:
-        print("Querying Blizzard API for the RecipeIcon of " + str(row[0]))
-        request = 'https://us.api.blizzard.com/data/wow/media/recipe/' + str(row[0]) + '?namespace=static-us&locale=en_US'
-        response = requests.get(request, headers=headers)
-        recipeIconUrl = response.json().get('assets')[0]['value']
-        recipeIconFileName = recipeIconUrl[47:]
 
-        # Committing found icon file name to the database
-        print("Updating RecipeIcon column with " + recipeIconFileName + " where RecipeId is " + str(row[0]))
-        mycursor.execute("update Recipes set RecipeIcon=%s where RecipeId=%s",tuple((recipeIconFileName,row[0])))
-        mydb.commit() 
+    print("Querying Blizzard API for the RecipeIcon of " + str(recipeId))
+    request = 'https://us.api.blizzard.com/data/wow/media/recipe/' + str(recipeId) + '?namespace=static-us&locale=en_US'
+    response = requests.get(request, headers=headers)
+    recipeIconUrl = response.json().get('assets')[0]['value']
+    recipeIconFileName = recipeIconUrl[47:]
 
-        #  Downloading recipe icon from the url found in the api query
-        print("Downloading " + recipeIconFileName + "to path " + dirPath)
-        recipeIconImgData = requests.get(recipeIconUrl).content
-        with open(dirPath + recipeIconFileName, "wb") as handler:
-            handler.write(recipeIconImgData)
+    # Committing found icon file name to the database
+    print("Updating RecipeIcon column with " + recipeIconFileName + " where RecipeId is " + str(recipeId))
+    mycursor.execute("update Recipes set RecipeIcon=%s where RecipeId=%s",tuple((recipeIconFileName,recipeId)))
+    mydb.commit() 
 
-def getSource(searchQuery):
-    itemName = searchQuery.replace(" ", "+").replace("'","%27").replace(",","%2C").replace(":","%3")
-    url = "https://www.dataforazeroth.com/collections/recipes/9455/arcanite-reaper"
-    page = requests.get(url)
-    soup = BeautifulSoup(page.content, "html.parser")
+    #  Downloading recipe icon from the url found in the api query
+    print("Downloading " + recipeIconFileName + "to path " + dirPath)
+    recipeIconImgData = requests.get(recipeIconUrl).content
+    with open(dirPath + recipeIconFileName, "wb") as handler:
+        handler.write(recipeIconImgData)
 
-    searchBar = soup.find("div", string="Source")
-    print(soup)
 
 
 async def getItemSource(recipeId):
@@ -251,7 +238,7 @@ async def getItemSource(recipeId):
     mycursor.execute("UPDATE Recipes SET SourceType=%s, Source=%s, SourceZone=%s where RecipeId=%s",tuple((itemInfo["Source Type (Icon)"], itemInfo["Source"], itemInfo["Source Zone"], itemInfo["Blizzard API ID"])))
     mydb.commit() 
 
-# asyncio.get_event_loop().run_until_complete(getItemSource(1353))
 main()
+
 print(datetime.datetime.now() - startTime)
 
