@@ -1,11 +1,12 @@
-from dotenv import load_dotenv
-import pyppeteer
+from dotenv import load_dotenv # pip install python-dotenv
+
 load_dotenv()
-from requests.exceptions import HTTPError
 import requests  # pip install requests
+from requests.exceptions import HTTPError
+import json
 import os
 import shutil
-import mysql.connector
+import mysql.connector # pip install mysql-connector-python
 import datetime
 import time
 import random
@@ -46,7 +47,7 @@ def dropTable(table):
     mycursor.execute(dropTable)
     print("Dropping " + table + " table...")
     mydb.commit()
-
+ 
 def fetchTable(table):
     fetchTable = "SELECT * FROM " + table
     print("Executing '" + fetchTable + "'")
@@ -59,6 +60,14 @@ def createTable(sqlQuery):
     mycursor.execute(sqlQuery)
     mydb.commit()
     print("Table has been created!")
+
+def getLatestNonNullRow():
+    fetchTable = "SELECT COUNT(*) FROM recipes WHERE Source IS NOT NULL;"
+    mycursor.execute(fetchTable)
+    myResult = mycursor.fetchone()
+    return myResult[0]
+
+
 
 def main():
     # sql queries to pass into the createTable function
@@ -111,10 +120,11 @@ def main():
     # skillTiersTable = mycursor.fetchall()
     # for row in skillTiersTable:
     #     apiGetRecipes(row[0], row[1])
-
+    latestRow = getLatestNonNullRow()
+    print("Continuing from row " + str(latestRow))
     mycursor.execute("SELECT RecipeId, RecipeName FROM Recipes")
     recipesTable = mycursor.fetchall()
-    for row in recipesTable[1183:]:
+    for row in recipesTable[latestRow:]:
         print(row[0])
         apiGetRecipeIcons(row[0])
         asyncio.get_event_loop().run_until_complete(getItemSource(row[0]))
@@ -193,67 +203,36 @@ def apiGetRecipeIcons(recipeId):
         handler.write(recipeIconImgData)
 
 
-async def getItemSource(recipeId):
-    userAgents = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
-    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36 Edg/91.0.864.54"
-    ]
 
-    browser = await launch(headless=False, slowMo=5)
-    page = await browser.newPage()
-    await page.setUserAgent(random.choice(userAgents))
-    print("Generating a random number between 2 and 10")
-    interval = random.randint(2,10)
-    print("Random number is " + str(interval))
-    await asyncio.sleep(interval)
-    print("Finding webpage for id " + str(recipeId))
-    await page.goto('https://www.dataforazeroth.com/collections/recipes/' + str(recipeId))
-    
-    
-    card = await page.querySelector('.card-body')
-    rows = await card.querySelectorAll('div .row')
+def getRecipesFromJSON():
+    fileName = "recipes.json"
+    print("Opening " + fileName + "...")
+    recipesJson = open(fileName)
+    recipes = json.load(recipesJson)
+    print("Found " + len(recipes) + " items in " + fileName + "!")
+    for recipe in recipes:
+        recipeId = recipe["id"]
+        recipeSourceType = recipe["sourceicon"]
+        recipeSource = recipe["source"]
 
-    itemInfo = {}
-    i = 0
-    print("Populating dictionary")
-    for row in rows:
-        if (i % 2 == 0):
-            key = await row.querySelector('.col-md-3')
-            keyEval = await page.evaluate('(element) => element.textContent', key)
-            value = await row.querySelector('.col-md-9')
-            valueEval = await page.evaluate('(element) => element.textContent', value)
-            itemInfo[keyEval] = valueEval
-        i += 1
-    await browser.close()
-    print("Closing browser...")
+        if "sourcezone" in recipe:
+            recipeSourceZone = recipe["sourcezone"]
+        else:
+            recipeSourceZone = None
 
-    if itemInfo["Source Type (Icon)"] == "— Blank —":
-        itemInfo["Source Type (Icon)"] = None
-    else:
-        itemInfo["Source Type (Icon)"]
+        if "sourcefaction" in recipe:
+            recipeSourceFaction = recipe["sourcefaction"]
+        else: 
+            recipeSourceFaction = None
 
-    if itemInfo["Source"] == "— Blank —":
-        itemInfo["Source"] = None
-    else:
-        itemInfo["Source"]
+        mycursor.execute("UPDATE Recipes SET SourceType=%s, Source=%s, SourceZone=%s, SourceFaction=%s where RecipeId=%s",tuple((recipeSourceType.capitalize(), recipeSource, recipeSourceZone, recipeSourceFaction, recipeId )))
+        mydb.commit() 
 
-    if itemInfo["Source Zone"] == "— Blank —":
-        itemInfo["Source Zone"] = None
-    else:
-        itemInfo["Source Zone"]
+    print("Closing " + fileName + "...")
+    recipesJson.close()
 
-    if itemInfo["Source Faction"] == "— Blank —":
-        itemInfo["Source Faction"] = None
-    else:
-        itemInfo["Source Faction"]
-    mycursor.execute("UPDATE Recipes SET SourceType=%s, Source=%s, SourceZone=%s, SourceFaction=%s where RecipeId=%s",tuple((itemInfo["Source Type (Icon)"].capitalize(), itemInfo["Source"], itemInfo["Source Zone"], itemInfo["Source Faction"], itemInfo["Blizzard API ID"])))
-    mydb.commit() 
 
-main()
+# main()
+
+
 print(datetime.datetime.now() - startTime)
