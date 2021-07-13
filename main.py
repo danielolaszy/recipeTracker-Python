@@ -1,16 +1,19 @@
-# from re import I
 from dotenv import load_dotenv
+import pyppeteer
 load_dotenv()
 from requests.exceptions import HTTPError
 import requests  # pip install requests
 import os
 import shutil
-from pathlib import Path
 import mysql.connector
-from bs4 import BeautifulSoup
 import datetime
+import time
+import random
 import asyncio
 from pyppeteer import launch
+
+
+
 startTime = datetime.datetime.now()
 
 mydb = mysql.connector.connect(
@@ -20,7 +23,8 @@ mydb = mysql.connector.connect(
     database=os.getenv("MYSQL_DATABASE"),
 )
 mycursor = mydb.cursor()
-headers = {'Authorization': 'Bearer ' + os.getenv('API_ACCESS_TOKEN')}
+headers = {'Authorization': 'Bearer ' + os.getenv('API_ACCESS_TOKEN'),
+            'Battlenet-Namespace': 'static-us'}
 
 def dropDatabase(db):
     dropDatabase = "DROP DATABASE IF EXISTS " + db
@@ -79,50 +83,45 @@ def main():
                         SourceType varchar(255) DEFAULT NULL,
                         Source varchar(255) DEFAULT NULL,
                         SourceZone varchar(255) DEFAULT NULL,
+                        SourceFaction varchar(255) DEFAULT NULL,
                         SkillTierId int NOT NULL,
                         PRIMARY KEY (RecipeId),
                         FOREIGN KEY (SkillTierId) REFERENCES SkillTiers(SkillTierId)
                         );
                         """
     # Dropping tables if exist
-    tables = ["Recipes", "SkillTiers", "Professions"]
-    for table in tables: 
-        dropTable(table)
+    # tables = ["Recipes", "SkillTiers", "Professions"]
+    # for table in tables: 
+    #     dropTable(table)
 
-    # Creating tables
-    createTable(tableProfessions)
-    createTable(tableSkillTiers)
-    createTable(tableRecipes)
+    # # Creating tables
+    # createTable(tableProfessions)
+    # createTable(tableSkillTiers)
+    # createTable(tableRecipes)
 
-# Get initial professions
-    apiGetProfessions()
+    # # Get initial professions
+    # apiGetProfessions()
 
-    mycursor.execute("SELECT ProfessionId FROM Professions")
-    professionsTable = mycursor.fetchall()
+    # mycursor.execute("SELECT ProfessionId FROM Professions")
+    # professionsTable = mycursor.fetchall()
+    # for row in professionsTable:
+    #     apiGetSkillTiers(row[0])
 
-    for row in professionsTable:
-        apiGetSkillTiers(row[0])
-
-    mycursor.execute("SELECT ProfessionId, SkillTierId, SkillTierName FROM SkillTiers")
-    skillTiersTable = mycursor.fetchall()
-
-    for row in skillTiersTable:
-        apiGetRecipes(row[0], row[1])
+    # mycursor.execute("SELECT ProfessionId, SkillTierId, SkillTierName FROM SkillTiers")
+    # skillTiersTable = mycursor.fetchall()
+    # for row in skillTiersTable:
+    #     apiGetRecipes(row[0], row[1])
 
     mycursor.execute("SELECT RecipeId, RecipeName FROM Recipes")
     recipesTable = mycursor.fetchall()
-
-    for row in recipesTable[:5]:
+    for row in recipesTable[1183:]:
+        print(row[0])
         apiGetRecipeIcons(row[0])
         asyncio.get_event_loop().run_until_complete(getItemSource(row[0]))
 
-
-
-
-
 def apiGetProfessions():
     print("Getting professions from the blizzard api...")
-    request = 'https://us.api.blizzard.com/data/wow/profession/index?namespace=static-us&locale=en_US'
+    request = 'https://us.api.blizzard.com/data/wow/profession/index?locale=en_US'
     response = requests.get(request, headers=headers)
     jsonResponse = response.json().get('professions')
     for profession in jsonResponse:
@@ -133,7 +132,7 @@ def apiGetProfessions():
 
 def apiGetSkillTiers(professionId):
     print("Getting skill tiers for profession " + str(professionId) + " from the blizzard api...")
-    request = 'https://us.api.blizzard.com/data/wow/profession/'+ str(professionId) +'?namespace=static-us&locale=en_US'
+    request = 'https://us.api.blizzard.com/data/wow/profession/'+ str(professionId) +'?locale=en_US'
     response = requests.get(request, headers=headers)
     skillTiers = response.json().get("skill_tiers")
     professionId = response.json().get("id")
@@ -144,7 +143,7 @@ def apiGetSkillTiers(professionId):
     print("Obtained skill tiers for all professions in db...")
 
 def apiGetRecipes(professionId, skillTierId):
-    request = 'https://us.api.blizzard.com/data/wow/profession/' + str(professionId) + '/skill-tier/' + str(skillTierId) + '?namespace=static-us&locale=en_US'
+    request = 'https://us.api.blizzard.com/data/wow/profession/' + str(professionId) + '/skill-tier/' + str(skillTierId) + '?locale=en_US'
     response = requests.get(request, headers=headers)
 
     skillTierId = response.json().get('id')
@@ -161,25 +160,23 @@ def apiGetRecipes(professionId, skillTierId):
                 mycursor.execute("INSERT INTO Recipes (RecipeId, RecipeName, SkillTierId) VALUES (%s, %s, %s)",tuple((recipe["id"], recipe["name"], skillTierId)))
                 mydb.commit() 
         print("\033[1m" + "Found " + str(professionRecipeNumber) + " recipes for " + str(professionTierName) + "!\n" + "\033[0m")
-    print("Obtained recipes for all skill tiers for all professions in db...")
 
 def apiGetRecipeIcons(recipeId):   
     dirPath = "./icons/recipes/"
-    print("Checking if '" + dirPath + "' exists...")
-    if os.path.exists(dirPath):
-        print("Dirctory '" + dirPath + "' found!")
-        print("Deleting '" + dirPath + "'")
-        shutil.rmtree(dirPath)
-        print("Creating '" + dirPath + "'")
-        os.makedirs(dirPath)
-    else:
-        print("Dirctory '" + dirPath + "not found...")
-        print("Creating '" + dirPath + "'")
-        os.makedirs(dirPath)
+    # print("Checking if '" + dirPath + "' exists...")
+    # if os.path.exists(dirPath):
+    #     print("Dirctory '" + dirPath + "' found!")
+    #     print("Deleting '" + dirPath + "'")
+    #     shutil.rmtree(dirPath)
+    #     print("Creating '" + dirPath + "'")
+    #     os.makedirs(dirPath)
+    # else:
+    #     print("Dirctory '" + dirPath + "not found...")
+    #     print("Creating '" + dirPath + "'")
+    #     os.makedirs(dirPath)
     
-
-    print("Querying Blizzard API for the RecipeIcon of " + str(recipeId))
-    request = 'https://us.api.blizzard.com/data/wow/media/recipe/' + str(recipeId) + '?namespace=static-us&locale=en_US'
+    print("\nQuerying Blizzard API for the RecipeIcon of " + str(recipeId))
+    request = 'https://us.api.blizzard.com/data/wow/media/recipe/' + str(recipeId) + '?locale=en_US'
     response = requests.get(request, headers=headers)
     recipeIconUrl = response.json().get('assets')[0]['value']
     recipeIconFileName = recipeIconUrl[47:]
@@ -190,21 +187,38 @@ def apiGetRecipeIcons(recipeId):
     mydb.commit() 
 
     #  Downloading recipe icon from the url found in the api query
-    print("Downloading " + recipeIconFileName + "to path " + dirPath)
+    print("Downloading " + recipeIconFileName + " to path " + dirPath)
     recipeIconImgData = requests.get(recipeIconUrl).content
     with open(dirPath + recipeIconFileName, "wb") as handler:
         handler.write(recipeIconImgData)
 
 
-
 async def getItemSource(recipeId):
-    print("Opening browser...")
-    browser = await launch(headless=True)
+    userAgents = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:89.0) Gecko/20100101 Firefox/89.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36 Edg/91.0.864.54"
+    ]
+
+    browser = await launch(headless=False, slowMo=5)
     page = await browser.newPage()
+    await page.setUserAgent(random.choice(userAgents))
+    print("Generating a random number between 2 and 10")
+    interval = random.randint(2,10)
+    print("Random number is " + str(interval))
+    await asyncio.sleep(interval)
     print("Finding webpage for id " + str(recipeId))
     await page.goto('https://www.dataforazeroth.com/collections/recipes/' + str(recipeId))
+    
+    
     card = await page.querySelector('.card-body')
     rows = await card.querySelectorAll('div .row')
+
     itemInfo = {}
     i = 0
     print("Populating dictionary")
@@ -219,26 +233,22 @@ async def getItemSource(recipeId):
     await browser.close()
     print("Closing browser...")
 
-
     if itemInfo["Source Type (Icon)"] == "— Blank —":
         itemInfo["Source Type (Icon)"] = None
     else:
-        itemInfo["Source Type (Icon)"].capitalize()
+        itemInfo["Source Type (Icon)"]
 
     if itemInfo["Source"] == "— Blank —":
         itemInfo["Source"] = None
     else:
-        itemInfo["Source"].capitalize()
+        itemInfo["Source"]
 
     if itemInfo["Source Zone"] == "— Blank —":
         itemInfo["Source Zone"] = None
     else:
-        itemInfo["Source Zone"].capitalize()
-
-    mycursor.execute("UPDATE Recipes SET SourceType=%s, Source=%s, SourceZone=%s where RecipeId=%s",tuple((itemInfo["Source Type (Icon)"], itemInfo["Source"], itemInfo["Source Zone"], itemInfo["Blizzard API ID"])))
+        itemInfo["Source Zone"]
+    mycursor.execute("UPDATE Recipes SET SourceType=%s, Source=%s, SourceZone=%s, SourceFaction=%s where RecipeId=%s",tuple((itemInfo["Source Type (Icon)"].capitalize(), itemInfo["Source"], itemInfo["Source Zone"], itemInfo["Source Faction"], itemInfo["Blizzard API ID"])))
     mydb.commit() 
 
 main()
-
 print(datetime.datetime.now() - startTime)
-
