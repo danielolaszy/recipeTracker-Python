@@ -247,6 +247,11 @@ async def getItemSource(recipeId):
         itemInfo["Source Zone"] = None
     else:
         itemInfo["Source Zone"]
+
+    if itemInfo["Source Faction"] == "— Blank —":
+        itemInfo["Source Faction"] = None
+    else:
+        itemInfo["Source Faction"]
     mycursor.execute("UPDATE Recipes SET SourceType=%s, Source=%s, SourceZone=%s, SourceFaction=%s where RecipeId=%s",tuple((itemInfo["Source Type (Icon)"].capitalize(), itemInfo["Source"], itemInfo["Source Zone"], itemInfo["Source Faction"], itemInfo["Blizzard API ID"])))
     mydb.commit() 
 
