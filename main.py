@@ -1,22 +1,14 @@
 from dotenv import load_dotenv # pip install python-dotenv
-
-load_dotenv()
+import mysql.connector # pip install mysql-connector-python
 import requests  # pip install requests
-from requests.exceptions import HTTPError
 import json
 import os
-import shutil
-import mysql.connector # pip install mysql-connector-python
 import datetime
-import time
-import random
-import asyncio
-from pyppeteer import launch
+load_dotenv()
 
+startTime = datetime.datetime.now() # Start timer to measure run time
 
-
-startTime = datetime.datetime.now()
-
+# Establishing connection to mysql database
 mydb = mysql.connector.connect(
     host=os.getenv("MYSQL_HOST"),
     user=os.getenv("MYSQL_USER"),
@@ -24,11 +16,13 @@ mydb = mysql.connector.connect(
     database=os.getenv("MYSQL_DATABASE"),
 )
 mycursor = mydb.cursor()
+
+# Headers used for Blizzard API
 headers = {'Authorization': 'Bearer ' + os.getenv('API_ACCESS_TOKEN'),
             'Battlenet-Namespace': 'static-us'}
 
 def dropDatabase(db):
-    dropDatabase = "DROP DATABASE IF EXISTS " + db
+    dropDatabase = "DROP DATABASE IF EXISTS " + db + ";"
     print("Executing '" + dropDatabase + "'")
     mycursor.execute(dropDatabase)
     print("Dropping " + db + "...")
@@ -42,14 +36,14 @@ def createDatabase(db):
     mydb.commit()
 
 def dropTable(table):
-    dropTable = "DROP TABLE IF EXISTS " + table
+    dropTable = "DROP TABLE IF EXISTS " + table + ";"
     print("Executing '" + dropTable + "'")
     mycursor.execute(dropTable)
     print("Dropping " + table + " table...")
     mydb.commit()
  
 def fetchTable(table):
-    fetchTable = "SELECT * FROM " + table
+    fetchTable = "SELECT * FROM " + table + ";"
     print("Executing '" + fetchTable + "'")
     mycursor.execute(fetchTable)
     myResult = mycursor.fetchall()
@@ -62,14 +56,14 @@ def createTable(sqlQuery):
     print("Table has been created!")
 
 def getLatestNonNullRow():
-    fetchTable = "SELECT COUNT(*) FROM recipes WHERE Source IS NOT NULL;"
+    fetchTable = "SELECT COUNT(*) FROM recipes WHERE RecipeIcon IS NOT NULL;"
     mycursor.execute(fetchTable)
     myResult = mycursor.fetchone()
     return myResult[0]
 
 
 
-def main():
+def mainProgram():
     # sql queries to pass into the createTable function
     tableProfessions = """CREATE TABLE Professions (
                             ProfessionId int NOT NULL,
@@ -108,7 +102,7 @@ def main():
     # createTable(tableSkillTiers)
     # createTable(tableRecipes)
 
-    # # Get initial professions
+    # # Get initial professions from Blizzard API
     # apiGetProfessions()
 
     # mycursor.execute("SELECT ProfessionId FROM Professions")
@@ -120,14 +114,20 @@ def main():
     # skillTiersTable = mycursor.fetchall()
     # for row in skillTiersTable:
     #     apiGetRecipes(row[0], row[1])
+
+    # jsonGetRecipes()
+
     latestRow = getLatestNonNullRow()
-    print("Continuing from row " + str(latestRow))
-    mycursor.execute("SELECT RecipeId, RecipeName FROM Recipes")
+    print(latestRow)
+
+    # Get recipes from database
+    mycursor.execute("SELECT RecipeId, RecipeName FROM Recipes") 
     recipesTable = mycursor.fetchall()
+    # Get recipe from recipes
     for row in recipesTable[latestRow:]:
-        print(row[0])
-        apiGetRecipeIcons(row[0])
-        asyncio.get_event_loop().run_until_complete(getItemSource(row[0]))
+        apiGetRecipeIcons(row[0]) # Get recipe icon
+
+
 
 def apiGetProfessions():
     print("Getting professions from the blizzard api...")
@@ -202,18 +202,80 @@ def apiGetRecipeIcons(recipeId):
     with open(dirPath + recipeIconFileName, "wb") as handler:
         handler.write(recipeIconImgData)
 
-
-
-def getRecipesFromJSON():
+def jsonGetRecipes():
     fileName = "recipes.json"
     print("Opening " + fileName + "...")
     recipesJson = open(fileName)
     recipes = json.load(recipesJson)
-    print("Found " + len(recipes) + " items in " + fileName + "!")
+    print("Found " + str(len(recipes)) + " items in " + fileName + "!")
     for recipe in recipes:
-        recipeId = recipe["id"]
-        recipeSourceType = recipe["sourceicon"]
-        recipeSource = recipe["source"]
+        print("Found " + recipe["name"])
+        if "id" in recipe:
+            recipeId = recipe["id"]
+        else:
+            recipeId = None
+
+        if "name" in recipe:
+            recipeName = recipe["name"]
+        else:
+            recipeName = None
+
+        if "prof" in recipe:
+            recipeProf = recipe["prof"]
+        else:
+            recipeProf = None 
+
+        if "icon" in recipe:
+            recipeIcon = recipe["icon"]
+        else:
+            recipeIcon = None
+
+        if "faction" in recipe:
+            recipeFaction = recipe["faction"]
+        else:
+            recipeFaction = None    
+
+        if "patch" in recipe:
+            if recipe["patch"] == "1.x":
+                recipeExpansion = "World of Warcraft"
+            elif recipe["patch"] == "2.x":
+                recipeExpansion = "The Burning Crusade"
+            elif recipe["patch"] == "3.x":
+                recipeExpansion = "Wrath of the Lich King"
+            elif recipe["patch"] == "4.x":
+                recipeExpansion = "Cataclysm"
+            elif recipe["patch"] == "5.0":
+                recipeExpansion = "Mists of Pandaria"
+            elif recipe["patch"] == "6.x":
+                recipeExpansion = "Warlords of Draenor"
+            elif recipe["patch"] == "7.x":
+                recipeExpansion = "Legion"
+            elif recipe["patch"] == "8.x" or "8.0" or "8.1" or "8.3":
+                recipeExpansion = "Battle for Azeroth"
+            elif recipe["patch"] == "9.x" or "9.0" or "9.1" or "9.3":
+                recipeExpansion = "Shadowlands"
+        else:
+            recipeExpansion = None       
+
+        if "rarity" in recipe:
+            recipeRarity = recipe["rarity"]
+        else:
+            recipeRarity = None    
+
+        if "seen" in recipe:
+            recipeSeen = recipe["seen"]
+        else:
+            recipeSeen = None
+
+        if "sourceicon" in recipe:
+            recipeSourceIcon = recipe["sourceicon"]
+        else:
+            recipeSourceIcon = None
+
+        if "source" in recipe:
+            recipeSource = recipe["source"]
+        else:
+            recipeSource = None
 
         if "sourcezone" in recipe:
             recipeSourceZone = recipe["sourcezone"]
@@ -222,17 +284,43 @@ def getRecipesFromJSON():
 
         if "sourcefaction" in recipe:
             recipeSourceFaction = recipe["sourcefaction"]
-        else: 
+        else:
             recipeSourceFaction = None
 
-        mycursor.execute("UPDATE Recipes SET SourceType=%s, Source=%s, SourceZone=%s, SourceFaction=%s where RecipeId=%s",tuple((recipeSourceType.capitalize(), recipeSource, recipeSourceZone, recipeSourceFaction, recipeId )))
+        if "sourcestanding" in recipe:
+            recipeSourceStanding = recipe["sourcestanding"]
+        else:
+            recipeSourceStanding = None
+
+        mycursor.execute("INSERT INTO Recipes (id, name, prof, icon, faction, expansion, rarity, seen, sourcetype, source, sourcezone, sourcefaction, sourcestanding) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",tuple((recipeId, recipeName, recipeProf, recipeIcon, recipeFaction, recipeExpansion, recipeRarity, recipeSeen, recipeSourceIcon, recipeSource, recipeSourceZone, recipeSourceFaction, recipeSourceStanding)))
         mydb.commit() 
 
     print("Closing " + fileName + "...")
     recipesJson.close()
 
+tableRecipes = """CREATE TABLE Recipes (
+                    id INT NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    prof VARCHAR(255) NOT NULL,
+                    icon VARCHAR(255),
+                    faction INT,
+                    expansion VARCHAR(255),
+                    rarity DECIMAL(6,5),
+                    seen INT,
+                    sourcetype VARCHAR(255),
+                    source VARCHAR(255),
+                    sourcezone VARCHAR(255),
+                    sourcefaction VARCHAR(255),
+                    sourcestanding VARCHAR(255),
+                    PRIMARY KEY (id));
+                    """
 
-# main()
+# mainProgram()
+dropTable("Recipes")
+createTable(tableRecipes)
+jsonGetRecipes()
+
+print(datetime.datetime.now() - startTime) # End timer to measure run time
 
 
-print(datetime.datetime.now() - startTime)
+# https://render.worldofwarcraft.com/us/icons/56/
