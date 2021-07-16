@@ -55,79 +55,6 @@ def createTable(sqlQuery):
     mydb.commit()
     print("Table has been created!")
 
-def getLatestNonNullRow():
-    fetchTable = "SELECT COUNT(*) FROM recipes WHERE RecipeIcon IS NOT NULL;"
-    mycursor.execute(fetchTable)
-    myResult = mycursor.fetchone()
-    return myResult[0]
-
-
-
-def mainProgram():
-    # sql queries to pass into the createTable function
-    tableProfessions = """CREATE TABLE Professions (
-                            ProfessionId int NOT NULL,
-                            ProfessionName varchar(255) NOT NULL,
-                            PRIMARY KEY (ProfessionId)
-                            );
-                            """
-    tableSkillTiers = """CREATE TABLE SkillTiers (
-                            SkillTierId int NOT NULL,
-                            SkillTierName varchar(255) NOT NULL,
-                            ProfessionId int NOT NULL,
-                            PRIMARY KEY (SkillTierId),
-                            FOREIGN KEY (ProfessionId) REFERENCES Professions(ProfessionId)
-                            );
-                            """
-    tableRecipes = """CREATE TABLE Recipes (
-                        RecipeId int NOT NULL,
-                        RecipeName varchar(255) NOT NULL,
-                        RecipeIcon varchar(255) DEFAULT NULL,
-                        SourceType varchar(255) DEFAULT NULL,
-                        Source varchar(255) DEFAULT NULL,
-                        SourceZone varchar(255) DEFAULT NULL,
-                        SourceFaction varchar(255) DEFAULT NULL,
-                        SkillTierId int NOT NULL,
-                        PRIMARY KEY (RecipeId),
-                        FOREIGN KEY (SkillTierId) REFERENCES SkillTiers(SkillTierId)
-                        );
-                        """
-    # Dropping tables if exist
-    # tables = ["Recipes", "SkillTiers", "Professions"]
-    # for table in tables: 
-    #     dropTable(table)
-
-    # # Creating tables
-    # createTable(tableProfessions)
-    # createTable(tableSkillTiers)
-    # createTable(tableRecipes)
-
-    # # Get initial professions from Blizzard API
-    # apiGetProfessions()
-
-    # mycursor.execute("SELECT ProfessionId FROM Professions")
-    # professionsTable = mycursor.fetchall()
-    # for row in professionsTable:
-    #     apiGetSkillTiers(row[0])
-
-    # mycursor.execute("SELECT ProfessionId, SkillTierId, SkillTierName FROM SkillTiers")
-    # skillTiersTable = mycursor.fetchall()
-    # for row in skillTiersTable:
-    #     apiGetRecipes(row[0], row[1])
-
-    # jsonGetRecipes()
-
-    latestRow = getLatestNonNullRow()
-    print(latestRow)
-
-    # Get recipes from database
-    mycursor.execute("SELECT RecipeId, RecipeName FROM Recipes") 
-    recipesTable = mycursor.fetchall()
-    # Get recipe from recipes
-    for row in recipesTable[latestRow:]:
-        apiGetRecipeIcons(row[0]) # Get recipe icon
-
-
 
 def apiGetProfessions():
     print("Getting professions from the blizzard api...")
@@ -202,6 +129,25 @@ def apiGetRecipeIcons(recipeId):
     with open(dirPath + recipeIconFileName, "wb") as handler:
         handler.write(recipeIconImgData)
 
+def makeDir(dirPath):
+    print("Checking if '" + dirPath + "' exists...")
+    if os.path.exists(dirPath):
+        print("Dirctory '" + dirPath + "' found!")
+        print("Doing nothing.")
+    else:
+        print("Dirctory '" + dirPath + "not found...")
+        print("Creating '" + dirPath + "'")
+        os.makedirs(dirPath)
+
+def getIcon(dirPath, fileName):
+    fileExt = ".jpg"
+    iconUrl = "https://render.worldofwarcraft.com/us/icons/56/" + fileName + fileExt
+    print("Downloading " + fileName + fileExt + "...")
+    iconImgData = requests.get(iconUrl).content
+    with open(dirPath + fileName + fileExt, "wb") as handler:
+        handler.write(iconImgData)
+    print("Saving " + fileName + "...")
+
 def jsonGetRecipes():
     fileName = "recipes.json"
     print("Opening " + fileName + "...")
@@ -209,7 +155,9 @@ def jsonGetRecipes():
     recipes = json.load(recipesJson)
     print("Found " + str(len(recipes)) + " items in " + fileName + "!")
     for recipe in recipes:
+
         print("Found " + recipe["name"])
+
         if "id" in recipe:
             recipeId = recipe["id"]
         else:
@@ -236,36 +184,24 @@ def jsonGetRecipes():
             recipeFaction = None    
 
         if "patch" in recipe:
-            if recipe["patch"] == "1.x":
-                recipeExpansion = "World of Warcraft"
-            elif recipe["patch"] == "2.x":
-                recipeExpansion = "The Burning Crusade"
-            elif recipe["patch"] == "3.x":
-                recipeExpansion = "Wrath of the Lich King"
-            elif recipe["patch"] == "4.x":
-                recipeExpansion = "Cataclysm"
-            elif recipe["patch"] == "5.0":
-                recipeExpansion = "Mists of Pandaria"
-            elif recipe["patch"] == "6.x":
-                recipeExpansion = "Warlords of Draenor"
-            elif recipe["patch"] == "7.x":
-                recipeExpansion = "Legion"
-            elif recipe["patch"] == "8.x" or "8.0" or "8.1" or "8.3":
-                recipeExpansion = "Battle for Azeroth"
-            elif recipe["patch"] == "9.x" or "9.0" or "9.1" or "9.3":
-                recipeExpansion = "Shadowlands"
+            recipePatch = recipe["patch"]
         else:
-            recipeExpansion = None       
+            recipePatch = None 
+
+        if "unobtainable" in recipe:
+            recipeUnobtainable = recipe["unobtainable"]
+        else:
+            recipeUnobtainable = None  
 
         if "rarity" in recipe:
             recipeRarity = recipe["rarity"]
         else:
-            recipeRarity = None    
+            recipeRarity = None
 
         if "seen" in recipe:
             recipeSeen = recipe["seen"]
         else:
-            recipeSeen = None
+            recipeSeen = None    
 
         if "sourceicon" in recipe:
             recipeSourceIcon = recipe["sourceicon"]
@@ -291,21 +227,95 @@ def jsonGetRecipes():
             recipeSourceStanding = recipe["sourcestanding"]
         else:
             recipeSourceStanding = None
+   
 
-        mycursor.execute("INSERT INTO Recipes (id, name, prof, icon, faction, expansion, rarity, seen, sourcetype, source, sourcezone, sourcefaction, sourcestanding) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",tuple((recipeId, recipeName, recipeProf, recipeIcon, recipeFaction, recipeExpansion, recipeRarity, recipeSeen, recipeSourceIcon, recipeSource, recipeSourceZone, recipeSourceFaction, recipeSourceStanding)))
+        mycursor.execute("INSERT INTO Recipes (id, name, prof, icon, faction, patch, unobtainable, rarity, seen, sourcetype, source, sourcezone, sourcefaction, sourcestanding) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",tuple((recipeId, recipeName, recipeProf, recipeIcon,recipeFaction, recipePatch, recipeUnobtainable, recipeRarity, recipeSeen, recipeSourceIcon, recipeSource, recipeSourceZone, recipeSourceFaction, recipeSourceStanding)))
         mydb.commit() 
 
     print("Closing " + fileName + "...")
     recipesJson.close()
 
-tableRecipes = """CREATE TABLE Recipes (
+def fixRecipes():
+
+    sqlStatements = [
+    "UPDATE `recipes` SET `patch` = 'World of Warcraft' WHERE (`patch` = '1.x');",
+    "UPDATE `recipes` SET `patch` = 'The Burning Crusade' WHERE (`patch` = '2.x');",
+    "UPDATE `recipes` SET `patch` = 'Wrath of the Lich King' WHERE (`patch` = '3.x')",
+    "UPDATE `recipes` SET `patch` = 'Cataclysm' WHERE (`patch` = '4.x');",
+    "UPDATE `recipes` SET `patch` = 'Mists of Pandaria' WHERE (`patch` = '5.x' OR `patch` = '5.0');",
+    "UPDATE `recipes` SET `patch` = 'Warlords of Draenor' WHERE (`patch` = '6.x');",
+    "UPDATE `recipes` SET `patch` = 'Legion' WHERE (`patch` = '7.x');",
+    "UPDATE `recipes` SET `patch` = 'Battle for Azeroth' WHERE (`patch` = '8.x' OR `patch` = '8.0' OR `patch` = '8.1' OR `patch` = '8.3');",
+    "UPDATE `recipes` SET `patch` = 'Shadowlands' WHERE (`patch` = '9.x' OR `patch` = '9.0' OR `patch` = '9.1' OR `patch` = '9.3');",
+    "ALTER TABLE `recipes` CHANGE COLUMN `patch` `expansion` VARCHAR(255) NULL DEFAULT NULL;",
+    ]
+
+    sqlDelUnobtainableNullExpansion = [
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23454');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23559');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23563');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23573');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23584');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23729');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '33823');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34121');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34122');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34123');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34124');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34125');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34126');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34127');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34146');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34147');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34148');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34380');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34381');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34382');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34384');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34385');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34386');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34388');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34389');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34390');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34391');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34392');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34393');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '35056');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '35060');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '35063');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '36697');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '36698');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '36699');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '36700');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '40235');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '40236');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '40355');",
+    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '40416');",
+    ]
+
+    for statement in sqlStatements:
+        mycursor.execute(statement)
+        mydb.commit()
+        
+    for statement in sqlDelUnobtainableNullExpansion:
+        mycursor.execute(statement)
+        mydb.commit()
+
+
+
+
+
+def makeDb():
+    # sql statement to create the table
+    tableRecipes = """CREATE TABLE recipes (
                     id INT NOT NULL,
                     name VARCHAR(255) NOT NULL,
                     prof VARCHAR(255) NOT NULL,
                     icon VARCHAR(255),
                     faction INT,
-                    expansion VARCHAR(255),
-                    rarity DECIMAL(6,5),
+                    patch VARCHAR(255),
+                    unobtainable INT,
+                    rarity DECIMAL(10,7),
                     seen INT,
                     sourcetype VARCHAR(255),
                     source VARCHAR(255),
@@ -315,12 +325,63 @@ tableRecipes = """CREATE TABLE Recipes (
                     PRIMARY KEY (id));
                     """
 
-# mainProgram()
-dropTable("Recipes")
-createTable(tableRecipes)
-jsonGetRecipes()
+    tableRealms = """CREATE TABLE realms (
+                    id INT NOT NULL,
+                    region VARCHAR(255) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    slug VARCHAR(255) NOT NULL,
+                    PRIMARY KEY (id));"""
+
+    # Dropping tables if exist
+    # dropTable("recipes")
+    dropTable("realms")
+
+    # Creating table
+    # createTable(tableRecipes)
+    createTable(tableRealms)
+
+    apiGetRealms()
+
+    # Populate recipes table from recipes.json
+    # jsonGetRecipes()
+
+    # Altering table
+    # fixRecipes()
+
+    # Creating directory to download icons to
+    # makeDir("./icons/recipes/")
+
+    # Getting unique icons from recipes table
+    # mycursor.execute("SELECT DISTINCT icon FROM recipes")
+    # recipesTable = mycursor.fetchall()
+
+    # for row in recipesTable:
+    #     getIcon("./icons/recipes/", row[0]) # Get icon for every recipe in recipesTable
+
+
+
+
+
+def apiGetRealms():
+    regions = ["US", "EU", "KR", "TW",]
+    for region in regions:
+        print("Getting realms for " + region)
+        request = 'https://' + region + '.api.blizzard.com/data/wow/realm/index?namespace=dynamic-' + region + '&locale=en_US'
+        response = requests.get(request, headers=headers)
+        realms = response.json().get("realms")
+        for realm in realms:
+            print("Found realm: " + realm["name"])
+            realmId = realm["id"]
+            realmName = realm["name"]
+            realmSlug = realm["slug"]
+            mycursor.execute("INSERT INTO realms (id, region, name, slug) VALUES (%s, %s, %s, %s)",tuple((realm["id"], region, realm["name"], realm["slug"])))
+            mydb.commit() 
+
+
+
+
+makeDb()
 
 print(datetime.datetime.now() - startTime) # End timer to measure run time
 
 
-# https://render.worldofwarcraft.com/us/icons/56/
