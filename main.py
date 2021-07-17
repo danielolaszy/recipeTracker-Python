@@ -249,7 +249,7 @@ def fixRecipes():
     "UPDATE `recipes` SET `patch` = 'Shadowlands' WHERE (`patch` = '9.x' OR `patch` = '9.0' OR `patch` = '9.1' OR `patch` = '9.3');",
     "ALTER TABLE `recipes` CHANGE COLUMN `patch` `expansion` VARCHAR(255) NULL DEFAULT NULL;",
     ]
-
+    # Deleting entries where expansion is null and unobtainable is 1
     sqlDelUnobtainableNullExpansion = [
     "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23454');",
     "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23559');",
@@ -293,11 +293,20 @@ def fixRecipes():
     "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '40416');",
     ]
 
+    sqlTrainer = [
+    "UPDATE recipes SET sourcetype = 'trainer' WHERE source  = 'Trainer';",
+    ]
+
+
     for statement in sqlStatements:
         mycursor.execute(statement)
         mydb.commit()
-        
+
     for statement in sqlDelUnobtainableNullExpansion:
+        mycursor.execute(statement)
+        mydb.commit()
+
+    for statement in sqlTrainer:
         mycursor.execute(statement)
         mydb.commit()
 
