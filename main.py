@@ -55,7 +55,6 @@ def createTable(sqlQuery):
     mydb.commit()
     print("Table has been created!")
 
-
 def apiGetProfessions():
     print("Getting professions from the blizzard api...")
     request = 'https://us.api.blizzard.com/data/wow/profession/index?locale=en_US'
@@ -100,17 +99,6 @@ def apiGetRecipes(professionId, skillTierId):
 
 def apiGetRecipeIcons(recipeId):   
     dirPath = "./icons/recipes/"
-    # print("Checking if '" + dirPath + "' exists...")
-    # if os.path.exists(dirPath):
-    #     print("Dirctory '" + dirPath + "' found!")
-    #     print("Deleting '" + dirPath + "'")
-    #     shutil.rmtree(dirPath)
-    #     print("Creating '" + dirPath + "'")
-    #     os.makedirs(dirPath)
-    # else:
-    #     print("Dirctory '" + dirPath + "not found...")
-    #     print("Creating '" + dirPath + "'")
-    #     os.makedirs(dirPath)
     
     print("\nQuerying Blizzard API for the RecipeIcon of " + str(recipeId))
     request = 'https://us.api.blizzard.com/data/wow/media/recipe/' + str(recipeId) + '?locale=en_US'
@@ -138,6 +126,21 @@ def makeDir(dirPath):
         print("Dirctory '" + dirPath + "not found...")
         print("Creating '" + dirPath + "'")
         os.makedirs(dirPath)
+
+def apiGetRealms():
+    regions = ["US", "EU", "KR", "TW",]
+    for region in regions:
+        print("Getting realms for " + region)
+        request = 'https://' + region + '.api.blizzard.com/data/wow/realm/index?namespace=dynamic-' + region + '&locale=en_US'
+        response = requests.get(request, headers=headers)
+        realms = response.json().get("realms")
+        for realm in realms:
+            print("Found realm: " + realm["name"])
+            realmId = realm["id"]
+            realmName = realm["name"]
+            realmSlug = realm["slug"]
+            mycursor.execute("INSERT INTO realms (id, region, name, slug) VALUES (%s, %s, %s, %s)",tuple((realm["id"], region, realm["name"], realm["slug"])))
+            mydb.commit() 
 
 def getIcon(dirPath, fileName):
     fileExt = ".jpg"
@@ -184,9 +187,9 @@ def jsonGetRecipes():
             recipeFaction = None    
 
         if "patch" in recipe:
-            recipePatch = recipe["patch"]
+            recipeExpansion = recipe["patch"]
         else:
-            recipePatch = None 
+            recipeExpansion = None 
 
         if "unobtainable" in recipe:
             recipeUnobtainable = recipe["unobtainable"]
@@ -229,7 +232,7 @@ def jsonGetRecipes():
             recipeSourceStanding = None
    
 
-        mycursor.execute("INSERT INTO Recipes (id, name, prof, icon, faction, patch, unobtainable, rarity, seen, sourcetype, source, sourcezone, sourcefaction, sourcestanding) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",tuple((recipeId, recipeName, recipeProf, recipeIcon,recipeFaction, recipePatch, recipeUnobtainable, recipeRarity, recipeSeen, recipeSourceIcon, recipeSource, recipeSourceZone, recipeSourceFaction, recipeSourceStanding)))
+        mycursor.execute("INSERT INTO Recipes (id, name, prof, icon, faction, expansion, unobtainable, rarity, seen, sourcetype, source, sourcezone, sourcefaction, sourcestanding) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",tuple((recipeId, recipeName, recipeProf, recipeIcon,recipeFaction, recipeExpansion, recipeUnobtainable, recipeRarity, recipeSeen, recipeSourceIcon, recipeSource, recipeSourceZone, recipeSourceFaction, recipeSourceStanding)))
         mydb.commit() 
 
     print("Closing " + fileName + "...")
@@ -238,75 +241,23 @@ def jsonGetRecipes():
 def fixRecipes():
 
     sqlStatements = [
-    "UPDATE `recipes` SET `patch` = 'World of Warcraft' WHERE (`patch` = '1.x');",
-    "UPDATE `recipes` SET `patch` = 'The Burning Crusade' WHERE (`patch` = '2.x');",
-    "UPDATE `recipes` SET `patch` = 'Wrath of the Lich King' WHERE (`patch` = '3.x')",
-    "UPDATE `recipes` SET `patch` = 'Cataclysm' WHERE (`patch` = '4.x');",
-    "UPDATE `recipes` SET `patch` = 'Mists of Pandaria' WHERE (`patch` = '5.x' OR `patch` = '5.0');",
-    "UPDATE `recipes` SET `patch` = 'Warlords of Draenor' WHERE (`patch` = '6.x');",
-    "UPDATE `recipes` SET `patch` = 'Legion' WHERE (`patch` = '7.x');",
-    "UPDATE `recipes` SET `patch` = 'Battle for Azeroth' WHERE (`patch` = '8.x' OR `patch` = '8.0' OR `patch` = '8.1' OR `patch` = '8.3');",
-    "UPDATE `recipes` SET `patch` = 'Shadowlands' WHERE (`patch` = '9.x' OR `patch` = '9.0' OR `patch` = '9.1' OR `patch` = '9.3');",
-    "ALTER TABLE `recipes` CHANGE COLUMN `patch` `expansion` VARCHAR(255) NULL DEFAULT NULL;",
-    ]
-    # Deleting entries where expansion is null and unobtainable is 1
-    sqlDelUnobtainableNullExpansion = [
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23454');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23559');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23563');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23573');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23584');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '23729');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '33823');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34121');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34122');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34123');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34124');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34125');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34126');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34127');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34146');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34147');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34148');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34380');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34381');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34382');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34384');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34385');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34386');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34388');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34389');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34390');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34391');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34392');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '34393');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '35056');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '35060');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '35063');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '36697');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '36698');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '36699');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '36700');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '40235');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '40236');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '40355');",
-    "DELETE FROM `recipetracker`.`recipes` WHERE (`id` = '40416');",
-    ]
-
-    sqlTrainer = [
+    "UPDATE `recipes` SET `expansion` = 'World of Warcraft' WHERE (`expansion` = '1.x');",
+    "UPDATE `recipes` SET `expansion` = 'The Burning Crusade' WHERE (`expansion` = '2.x');",
+    "UPDATE `recipes` SET `expansion` = 'Wrath of the Lich King' WHERE (`expansion` = '3.x')",
+    "UPDATE `recipes` SET `expansion` = 'Cataclysm' WHERE (`expansion` = '4.x');",
+    "UPDATE `recipes` SET `expansion` = 'Mists of Pandaria' WHERE (`expansion` = '5.x' OR `expansion` = '5.0');",
+    "UPDATE `recipes` SET `expansion` = 'Warlords of Draenor' WHERE (`expansion` = '6.x');",
+    "UPDATE `recipes` SET `expansion` = 'Legion' WHERE (`expansion` = '7.x');",
+    "UPDATE `recipes` SET `expansion` = 'Battle for Azeroth' WHERE (`expansion` = '8.x' OR `expansion` = '8.0' OR `expansion` = '8.1' OR `expansion` = '8.3');",
+    "UPDATE `recipes` SET `expansion` = 'Shadowlands' WHERE (`expansion` = '9.x' OR `expansion` = '9.0' OR `expansion` = '9.1' OR `expansion` = '9.3');",
+    "DELETE FROM recipes WHERE expansion IS NULL;",
+    "UPDATE recipes SET sourcetype = sourcezone WHERE sourcezone IS NOT NULL;", 
     "UPDATE recipes SET sourcetype = 'trainer' WHERE source  = 'Trainer';",
+    "UPDATE recipes SET sourcetype = 'unobtainable' WHERE unobtainable = '1';",
+    "UPDATE recipes SET sourcetype = 'unobtainable' WHERE unobtainable = '2';",
     ]
-
 
     for statement in sqlStatements:
-        mycursor.execute(statement)
-        mydb.commit()
-
-    for statement in sqlDelUnobtainableNullExpansion:
-        mycursor.execute(statement)
-        mydb.commit()
-
-    for statement in sqlTrainer:
         mycursor.execute(statement)
         mydb.commit()
 
@@ -322,7 +273,7 @@ def makeDb():
                     prof VARCHAR(255) NOT NULL,
                     icon VARCHAR(255),
                     faction INT,
-                    patch VARCHAR(255),
+                    expansion VARCHAR(255),
                     unobtainable INT,
                     rarity DECIMAL(10,7),
                     seen INT,
@@ -342,20 +293,20 @@ def makeDb():
                     PRIMARY KEY (id));"""
 
     # Dropping tables if exist
-    # dropTable("recipes")
+    dropTable("recipes")
     dropTable("realms")
 
     # Creating table
-    # createTable(tableRecipes)
+    createTable(tableRecipes)
     createTable(tableRealms)
 
     apiGetRealms()
 
     # Populate recipes table from recipes.json
-    # jsonGetRecipes()
+    jsonGetRecipes()
 
     # Altering table
-    # fixRecipes()
+    fixRecipes()
 
     # Creating directory to download icons to
     # makeDir("./icons/recipes/")
@@ -363,34 +314,10 @@ def makeDb():
     # Getting unique icons from recipes table
     # mycursor.execute("SELECT DISTINCT icon FROM recipes")
     # recipesTable = mycursor.fetchall()
-
     # for row in recipesTable:
     #     getIcon("./icons/recipes/", row[0]) # Get icon for every recipe in recipesTable
 
-
-
-
-
-def apiGetRealms():
-    regions = ["US", "EU", "KR", "TW",]
-    for region in regions:
-        print("Getting realms for " + region)
-        request = 'https://' + region + '.api.blizzard.com/data/wow/realm/index?namespace=dynamic-' + region + '&locale=en_US'
-        response = requests.get(request, headers=headers)
-        realms = response.json().get("realms")
-        for realm in realms:
-            print("Found realm: " + realm["name"])
-            realmId = realm["id"]
-            realmName = realm["name"]
-            realmSlug = realm["slug"]
-            mycursor.execute("INSERT INTO realms (id, region, name, slug) VALUES (%s, %s, %s, %s)",tuple((realm["id"], region, realm["name"], realm["slug"])))
-            mydb.commit() 
-
-
-
-
 makeDb()
+# fixRecipes()
 
 print(datetime.datetime.now() - startTime) # End timer to measure run time
-
-
