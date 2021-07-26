@@ -2,9 +2,9 @@
 
 ## About The Project
 
-[![Product Name Screen Shot][product-screenshot]](https://github.com/Voiidv2/wowRecipeTracker)
+[![Product Name Screen Shot][product-screenshot]](https://github.com/Voiidv2/recipeTracker-Python)
 
-This Python project allows you to populate a mysql database from a json file from Data for Azeroth
+This Python project allows you to populate a mysql database from a json file from [dataforazeroth.com](https://www.dataforazeroth.com/).
 
 ## Getting Started
 
@@ -19,7 +19,7 @@ In order to get started with the code you'll need to have Python 3.9.6+. To get 
 
 1. Clone the repo
    ```sh
-   git clone https://github.com/Voiidv2/RecipeTrackerDB.git
+   git clone https://github.com/Voiidv2/recipeTracker-Python.git
    ```
 2. Install python packages via pip
    ```sh
